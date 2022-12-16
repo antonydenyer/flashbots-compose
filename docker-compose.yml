@@ -32,6 +32,7 @@ services:
         "--verbosity=3",
         "--miner.extradata=${BUILDER_EXTRA_DATA}",
         "--miner.etherbase=${BUILDER_ADDRESS}",
+        "--miner.algotype=greedy",
       ]
   prysm:
     build: prysm
