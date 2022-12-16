@@ -18,7 +18,7 @@ services:
         "--builder.bellatrix_fork_version=0x02001020",
         "--builder.genesis_fork_version=0x00001020",
         "--builder.genesis_validators_root=0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb",
-        "--builder.secret_key=${BUILDER_SECRET_KEY}",
+        "--builder.secret_key=${BUILDER_TX_SIGNING_KEY}",
         "--datadir=/data",
         "--goerli",
         "--syncmode=snap",
@@ -30,8 +30,8 @@ services:
         "--authrpc.jwtsecret=/secrets/jwtsecret",
         "--authrpc.vhosts=*",
         "--verbosity=3",
-        "--miner.extradata=Building Blocks, Breaking Chains",
-        "--miner.etherbase=${BUILDER_ADDRESS}"
+        "--miner.extradata=${BUILDER_EXTRA_DATA}",
+        "--miner.etherbase=${BUILDER_ADDRESS}",
       ]
   prysm:
     build: prysm
