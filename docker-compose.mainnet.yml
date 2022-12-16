@@ -1,0 +1,259 @@
+version: "3.9"
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 100m
+      max-file: "3"
+      tag: '{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}'
+
+services:
+  execution:
+    build: execution
+    environment:
+      - BUILDER_TX_SIGNING_KEY=${BUILDER_TX_SIGNING_KEY}
+    volumes:
+      - execution-data:/data
+      - secrets:/secrets
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+    command: [
+      "--builder=true",
+      "--builder.remote_relay_endpoint=https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@boost-relay.flashbots.net",
+      "--builder.beacon_endpoint=http://consensus:4000/",
+      "--builder.bellatrix_fork_version=0x02000000",
+      "--builder.genesis_fork_version=0x00000000",
+      "--builder.genesis_validators_root=0x0000000000000000000000000000000000000000000000000000000000000000",
+      "--builder.secret_key=${BUILDER_TX_SIGNING_KEY}",
+      "--datadir=/data",
+      "--syncmode=snap",
+      "--port=30303",
+      "--http",
+      "--http.vhosts=*",
+      "--http.corsdomain=*",
+      "--http.addr=0.0.0.0",
+      "--http.port=8545",
+      "--http.api=admin,debug,web3,eth,txpool,personal,miner,net,builder,engine",
+      "--ws.api=web3,eth,net",
+      "--ws.addr=0.0.0.0",
+      "--ws.port=8546",
+      "--pprof",
+      "--pprof.addr=0.0.0.0",
+      "--metrics",
+      "--metrics.expensive",
+      "--authrpc.addr=0.0.0.0",
+      "--authrpc.port=8551",
+      "--authrpc.jwtsecret=/secrets/jwtsecret",
+      "--authrpc.vhosts=*",
+      "--verbosity=3",
+      "--miner.algotype=greedy",
+      "--miner.extradata=${BUILDER_EXTRA_DATA}",
+      "--miner.etherbase=${BUILDER_ADDRESS}",
+    ]
+    <<: *logging
+
+  consensus:
+    build: consensus
+    volumes:
+      - consensus-data:/data
+      - secrets:/secrets
+    ports:
+      - "5052:5052"
+      - "9000:9000"
+      - "13000:13000"
+    command: [
+      "--accept-terms-of-use",
+      "--execution-endpoint=http://execution:8551",
+      "--jwt-secret=/secrets/jwtsecret",
+      "--suggested-fee-recipient=${BUILDER_ADDRESS}",
+      "--datadir=/data",
+      "--checkpoint-sync-url=${BEACON_API_URL}",
+      "--genesis-beacon-api-url=${BEACON_API_URL}",
+      "--rpc-host=0.0.0.0",
+      "--grpc-gateway-host=0.0.0.0",
+      "--grpc-gateway-port=5052",
+      "--monitoring-host=0.0.0.0",
+      "--monitoring-port=8008",
+      "--p2p-tcp-port=9000",
+      "--p2p-udp-port=9000",
+    ]
+    <<: *logging
+
+  prometheus:
+    restart: unless-stopped
+    image: prom/prometheus
+    volumes:
+      - prom-data:/prometheus
+      - /etc/localtime:/etc/localtime:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command: [
+      "--config.file=/etc/prometheus/prometheus.yml",
+      "--storage.tsdb.path=/prometheus", 
+      "--web.console.libraries=/usr/share/prometheus/console_libraries", 
+      "--web.console.templates=/usr/share/prometheus/consoles"
+    ]
+    <<: *logging
+    depends_on:
+      - node-exporter
+      - blackbox-exporter
+      - json-exporter
+      - cryptowat-exporter
+      - cadvisor
+      - ethereum-metrics-exporter
+
+  ethereum-metrics-exporter:
+    image: samcm/ethereum-metrics-exporter
+    command: [
+      "--consensus-url=http://consensus:5052",
+      "--execution-url=http://execution:8545",
+    ]
+    restart: unless-stopped
+    <<: *logging
+    depends_on:
+      - execution
+      - consensus
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    command: [
+      "--path.rootfs=/host",
+      "--path.procfs=/host/proc",
+      "--path.sysfs=/host/sys",
+      "--collector.filesystem.ignored-mount-points='^/(dev|proc|sys|run|var/lib/docker/.+)($|/)'",
+      "--no-collector.ipvs",
+    ]
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
+      - /etc/hostname:/etc/nodename:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/localtime:/etc/localtime:ro
+    <<: *logging
+    depends_on:
+      - builder
+      - consensus
+
+  blackbox-exporter:
+    restart: unless-stopped
+    image: prom/blackbox-exporter:master
+    volumes:
+      - ./prometheus/blackbox.yml:/config/blackbox.yml
+      - /etc/localtime:/etc/localtime:ro
+    <<: *logging
+    command:
+      - --config.file=/config/blackbox.yml
+    depends_on:
+      - execution
+      - consensus
+
+  json-exporter:
+    restart: unless-stopped
+    image: quay.io/prometheuscommunity/json-exporter
+    volumes:
+      - ./prometheus/json.yml:/config/json.yml
+      - /etc/localtime:/etc/localtime:ro
+    <<: *logging
+    command:
+      - --config.file
+      - /config/json.yml
+    depends_on:
+      - execution
+      - consensus
+
+  cryptowat-exporter:
+    restart: unless-stopped
+    image: nbarrientos/cryptowat_exporter
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - CRYPTOWAT_EXCHANGES=kraken
+      - CRYPTOWAT_PAIRS=ethusd,ethchf
+      - CRYPTOWAT_CACHESECONDS=300
+      - TZ=Europe/Zurich
+    <<: *logging
+    depends_on:
+      - execution
+      - consensus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    command:
+      - --docker_only
+      - --housekeeping_interval=30s
+    <<: *logging
+    depends_on:
+      - execution
+      - consensus
+
+  promtail:
+    image: grafana/promtail:latest
+    user: root
+    volumes:
+      - /etc/machine-id:/etc/machine-id:ro
+      - ./promtail:/etc/promtail
+      - promtail-data:/tmp
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command:
+      - '--config.file=/etc/promtail/promtail.yml'
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - execution
+      - consensus
+    <<: *logging
+
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - loki-data:/tmp
+      - ./loki:/etc/loki
+    command:
+      - '--config.file=/etc/loki/loki.yml'
+    restart: unless-stopped
+    <<: *logging
+    depends_on:
+      - execution
+      - consensus
+
+  grafana:
+    build:
+      context: ./grafana
+    image: grafana:local
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SERVER_HTTP_PORT=3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - grafana-config:/etc/grafana
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - prometheus
+      - loki
+      - promtail
+      - execution
+      - consensus
+    entrypoint: ["provision-dashboards.sh"]
+    command: /run.sh
+    <<: *logging
+
+volumes:
+  execution-data:
+  consensus-data:
+  secrets:
+  grafana-data:
+  grafana-config:
+  prom-data:
+  loki-data:
+  promtail-data:
