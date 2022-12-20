@@ -134,7 +134,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
     <<: *logging
     depends_on:
-      - builder
+      - execution
       - consensus
 
   blackbox-exporter:
