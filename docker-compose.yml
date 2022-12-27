@@ -1,12 +1,12 @@
 version: "3.1"
 
 services:
-  geth:
-    build: geth
+  execution:
+    build: execution
     environment:
       - BUILDER_TX_SIGNING_KEY=${BUILDER_TX_SIGNING_KEY}
     volumes:
-      - ./data/geth:/data
+      - ./data/execution:/data
       - ./data/secrets:/secrets
     ports:
       - 30303
@@ -14,11 +14,11 @@ services:
       [
         "--builder=true",
         "--builder.remote_relay_endpoint=https://0xafa4c6985aa049fb79dd37010438cfebeb0f2bd42b115b89dd678dab0670c1de38da0c4e9138c9290a398ecd9a0b3110@boost-relay-goerli.flashbots.net",
-        "--builder.beacon_endpoint=http://prysm:4000/",
+        "--builder.beacon_endpoint=http://consensus:4000/",
         "--builder.bellatrix_fork_version=0x02001020",
         "--builder.genesis_fork_version=0x00001020",
         "--builder.genesis_validators_root=0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb",
-        "--builder.secret_key=${BUILDER_SECRET_KEY}",
+        "--builder.secret_key=${BUILDER_TX_SIGNING_KEY}",
         "--datadir=/data",
         "--goerli",
         "--syncmode=snap",
@@ -30,13 +30,14 @@ services:
         "--authrpc.jwtsecret=/secrets/jwtsecret",
         "--authrpc.vhosts=*",
         "--verbosity=3",
-        "--miner.extradata=Building Blocks, Breaking Chains",
-        "--miner.etherbase=${BUILDER_ADDRESS}"
+        "--miner.extradata=${BUILDER_EXTRA_DATA}",
+        "--miner.etherbase=${BUILDER_ADDRESS}",
+        "--miner.algotype=greedy",
       ]
-  prysm:
-    build: prysm
+  consensus:
+    build: consensus
     volumes:
-      - ./data/prysm:/data
+      - ./data/consensus:/data
       - ./data/secrets:/secrets
     ports:
       - 13000
@@ -44,7 +45,7 @@ services:
       [
         "--accept-terms-of-use",
         "--goerli=true",
-        "--execution-endpoint=http://geth:8551",
+        "--execution-endpoint=http://execution:8551",
         "--jwt-secret=/secrets/jwtsecret",
         "--suggested-fee-recipient=${BUILDER_ADDRESS}",
         "--datadir=/data",
