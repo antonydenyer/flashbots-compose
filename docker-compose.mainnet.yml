@@ -122,7 +122,7 @@ services:
       "--path.rootfs=/host",
       "--path.procfs=/host/proc",
       "--path.sysfs=/host/sys",
-      "--collector.filesystem.ignored-mount-points='^/(dev|proc|sys|run|var/lib/docker/.+)($|/)'",
+      "--collector.filesystem.ignored-mount-points='^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)'",
       "--no-collector.ipvs",
     ]
     pid: host
