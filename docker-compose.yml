@@ -14,7 +14,7 @@ services:
       [
         "--builder=true",
         "--builder.remote_relay_endpoint=https://0xafa4c6985aa049fb79dd37010438cfebeb0f2bd42b115b89dd678dab0670c1de38da0c4e9138c9290a398ecd9a0b3110@boost-relay-goerli.flashbots.net",
-        "--builder.beacon_endpoint=http://consensus:4000/",
+        "--builder.beacon_endpoint=http://consensus:5052/",
         "--builder.bellatrix_fork_version=0x02001020",
         "--builder.genesis_fork_version=0x00001020",
         "--builder.genesis_validators_root=0x043db0d9a83813551ee2f33450d23797757d430911a9320530ad8a0eabc43efb",
